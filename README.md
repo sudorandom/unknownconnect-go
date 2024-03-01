@@ -11,6 +11,8 @@ go get -u github.com/sudorandom/unknownconnect-go
 Short example:
 ```golang
 import (
+    "log/slog"
+
     unknownconnect "github.com/sudorandom/unknownconnect-go"
 )
 
@@ -59,7 +61,7 @@ package main
 
 import (
     "context"
-    "log"
+    "log/slog"
     "net/http"
 
     greetv1 "example/gen/greet/v1"
@@ -84,10 +86,10 @@ func main() {
         connect.NewRequest(&greetv1.GreetRequest{Name: "Jane"}),
     )
     if err != nil {
-        log.Println(err)
+        slog.Error(err.Error())
         return
     }
-    log.Println(res.Msg.Greeting)
+    slog.Info(res.Msg.Greeting)
 }
 ```
 
