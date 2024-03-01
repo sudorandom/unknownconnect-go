@@ -81,7 +81,7 @@ func (w *WrappedClientConn) Receive(msg any) error {
 
 func checkForUnknownFields(m any, callback func(proto.Message)) {
 	if msg, ok := (m).(proto.Message); ok {
-		if messageHasUnknown(msg.ProtoReflect()) {
+		if MessageHasUnknownFields(msg.ProtoReflect()) {
 			callback(msg)
 			return
 		}
@@ -89,7 +89,7 @@ func checkForUnknownFields(m any, callback func(proto.Message)) {
 	}
 }
 
-func messageHasUnknown(msg protoreflect.Message) bool {
+func MessageHasUnknownFields(msg protoreflect.Message) bool {
 	if len(msg.GetUnknown()) > 0 {
 		return true
 	}
@@ -98,7 +98,7 @@ func messageHasUnknown(msg protoreflect.Message) bool {
 	msg.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
 		switch fd.Kind() {
 		case protoreflect.MessageKind:
-			if messageHasUnknown(v.Message()) {
+			if MessageHasUnknownFields(v.Message()) {
 				hasUnknown = true
 				return false
 			}

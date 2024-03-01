@@ -15,6 +15,7 @@ import (
 	"github.com/sudorandom/unknownconnect-go/internal/proto/new"
 	"github.com/sudorandom/unknownconnect-go/internal/proto/old/oldconnect"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 func TestOutdatedClient(t *testing.T) {
@@ -51,6 +52,35 @@ func TestOutdatedClient(t *testing.T) {
 	assert.Contains(t, string(respBody), "is not implemented")
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	assert.Equal(t, 1, calledCount)
+}
+
+func TestMessageHasUnknownFields(t *testing.T) {
+	t.Run("with unknown field", func(t *testing.T) {
+		user := &new.User{
+			Name:  "bob",
+			Email: "bob@example.com",
+		}
+		user.ProtoReflect().SetUnknown(protoreflect.RawFields([]byte{8, 96, 01}))
+		assert.True(t, unknownconnect.MessageHasUnknownFields(user.ProtoReflect()))
+	})
+	t.Run("without unknown field", func(t *testing.T) {
+		user := &new.User{
+			Name:  "bob",
+			Email: "bob@example.com",
+		}
+		assert.False(t, unknownconnect.MessageHasUnknownFields(user.ProtoReflect()))
+	})
+	t.Run("with nested unknown field", func(t *testing.T) {
+		user := &new.User{
+			Name:  "bob",
+			Email: "bob@example.com",
+		}
+		user.ProtoReflect().SetUnknown(protoreflect.RawFields([]byte{8, 96, 01}))
+		req := &new.NewUserRequest{
+			User: user,
+		}
+		assert.True(t, unknownconnect.MessageHasUnknownFields(req.ProtoReflect()))
+	})
 }
 
 type LocalClient struct {

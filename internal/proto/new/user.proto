@@ -11,6 +11,7 @@ message NewUserRequest {
 }
 
 message NewUserResponse {
+  User user = 1;
 }
 
 message User {
