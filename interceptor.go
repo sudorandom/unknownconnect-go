@@ -45,7 +45,7 @@ func (i *interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 func (i *interceptor) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
 	return func(ctx context.Context, spec connect.Spec) connect.StreamingClientConn {
 		conn := next(ctx, spec)
-		return &WrappedClientConn{
+		return &wrappedClientConn{
 			ctx:                 ctx,
 			StreamingClientConn: conn,
 			callback:            i.callback,
@@ -57,7 +57,7 @@ func (i *interceptor) WrapStreamingClient(next connect.StreamingClientFunc) conn
 func (i *interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
 
-		return next(ctx, &WrappedHandlerConn{
+		return next(ctx, &wrappedHandlerConn{
 			ctx:                  ctx,
 			StreamingHandlerConn: conn,
 			callback:             i.callback,
@@ -66,32 +66,32 @@ func (i *interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) co
 	}
 }
 
-type WrappedHandlerConn struct {
+type wrappedHandlerConn struct {
 	connect.StreamingHandlerConn
 	ctx      context.Context
 	callback UnknownCallback
 	spec     connect.Spec
 }
 
-func (w *WrappedHandlerConn) Receive(msg any) error {
+func (w *wrappedHandlerConn) Receive(msg any) error {
 	if err := checkForUnknownFields(w.ctx, msg, w.spec, w.callback); err != nil {
 		return err
 	}
 	return w.StreamingHandlerConn.Receive(msg)
 }
 
-func (w *WrappedHandlerConn) RequestHeader() http.Header {
+func (w *wrappedHandlerConn) RequestHeader() http.Header {
 	return w.StreamingHandlerConn.RequestHeader()
 }
 
-type WrappedClientConn struct {
+type wrappedClientConn struct {
 	connect.StreamingClientConn
 	ctx      context.Context
 	callback UnknownCallback
 	spec     connect.Spec
 }
 
-func (w *WrappedClientConn) Receive(msg any) error {
+func (w *wrappedClientConn) Receive(msg any) error {
 	if err := checkForUnknownFields(w.ctx, msg, w.spec, w.callback); err != nil {
 		return err
 	}
