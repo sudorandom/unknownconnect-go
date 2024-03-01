@@ -11,12 +11,19 @@ import (
 
 var _ connect.Interceptor = (*interceptor)(nil) // we make sure it implements the interface
 
+// UnknownCallback is called whenever there is an unknown field. Note that the proto.Message
+// is the base protobuf message for the RPC call. The message with the unknown field(s) can
+// be nested deeper into this given message.
 type UnknownCallback func(context.Context, connect.Spec, proto.Message) error
 
 type interceptor struct {
 	callback UnknownCallback
 }
 
+// NewInterceptor creates a new interceptor appropriate to pass into a new ConnectRPC client or server.
+// The given callback is called whenever a message is detected to have an unknown field. That means
+// a field is being given to this client/server that does not. The callback can decide what to do.
+// Any error returned from the callback will be used as an error in the request or response.
 func NewInterceptor(callback UnknownCallback) *interceptor {
 	return &interceptor{callback: callback}
 }
@@ -56,7 +63,6 @@ func (i *interceptor) WrapStreamingClient(next connect.StreamingClientFunc) conn
 
 func (i *interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
-
 		return next(ctx, &wrappedHandlerConn{
 			ctx:                  ctx,
 			StreamingHandlerConn: conn,
@@ -107,6 +113,7 @@ func checkForUnknownFields(ctx context.Context, m any, spec connect.Spec, callba
 	return nil
 }
 
+// MessageHasUnknownFields returns true if the given protoreflect.Message has unknown fields.
 func MessageHasUnknownFields(msg protoreflect.Message) bool {
 	if len(msg.GetUnknown()) > 0 {
 		return true
