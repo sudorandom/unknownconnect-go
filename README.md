@@ -1,7 +1,7 @@
 # unknownconnect-go
 [![Go](https://github.com/sudorandom/unknownconnect-go/actions/workflows/go.yml/badge.svg)](https://github.com/sudorandom/unknownconnect-go/actions/workflows/go.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/sudorandom/unknownconnect-go)](https://goreportcard.com/report/github.com/sudorandom/unknownconnect-go) [![Go Reference](https://pkg.go.dev/badge/github.com/sudorandom/unknownconnect-go.svg)](https://pkg.go.dev/github.com/sudorandom/unknownconnect-go)
 
-unknownconnect-go has an interceptor for [ConnectRPC](https://connectrpc.com/) clients and servers that tells you if you are receiving protobuf messages with unknown fields. This is useful to know when you should upgrade your gRPC clients or servers to the latest version.
+unknownconnect-go is an interceptor for [ConnectRPC](https://connectrpc.com/) clients and servers that tells you if you are receiving protobuf messages with unknown fields. This is useful to know when you should upgrade your gRPC clients or servers to the latest version.
 
 ```bash
 go get -u github.com/sudorandom/unknownconnect-go
