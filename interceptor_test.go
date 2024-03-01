@@ -2,7 +2,7 @@ package unknownconnect_test
 
 import (
 	"bytes"
-	"fmt"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,8 +20,9 @@ import (
 
 func TestOutdatedClient(t *testing.T) {
 	var calledCount int
-	interceptor := unknownconnect.NewInterceptor(func(proto.Message) {
+	interceptor := unknownconnect.NewInterceptor(func(context.Context, connect.Spec, proto.Message) error {
 		calledCount++
+		return nil
 	})
 	_, handler := oldconnect.NewUserManagementHandler(
 		oldconnect.UnimplementedUserManagementHandler{},
@@ -95,7 +96,6 @@ func NewLocalClient(handler http.Handler) *LocalClient {
 
 func (c LocalClient) Do(req *http.Request) (*http.Response, error) {
 	recorder := httptest.NewRecorder()
-	fmt.Println("req", req.URL.Path)
 	c.handler.ServeHTTP(recorder, req)
 	return recorder.Result(), nil
 }
