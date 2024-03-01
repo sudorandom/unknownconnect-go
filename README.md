@@ -8,6 +8,7 @@ go get -u github.com/sudorandom/unknownconnect-go
 ```
 
 ## Server Examples
+Short example:
 ```golang
 import (
     unknownconnect "github.com/sudorandom/unknownconnect-go"
@@ -20,7 +21,7 @@ unknownconnect.NewInterceptor(func(ctx context.Context, spec connect.Spec, msg p
 })
 ```
 
-
+Full:
 ```golang
 import (
     "log/slog"
