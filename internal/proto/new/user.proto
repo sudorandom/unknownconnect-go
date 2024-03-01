@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package helloworld.new;
+
+service UserManagement {
+  rpc NewUser(NewUserRequest) returns (NewUserResponse) {}
+}
+
+message NewUserRequest {
+  User user = 1;
+}
+
+message NewUserResponse {
+}
+
+message User {
+  string name = 1;
+  string email = 2;
+}
