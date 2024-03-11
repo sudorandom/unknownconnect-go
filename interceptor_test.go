@@ -16,7 +16,50 @@ import (
 	"github.com/sudorandom/unknownconnect-go/internal/proto/old/oldconnect"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/testing/protopack"
 )
+
+func TestDropUnknownFields(t *testing.T) {
+	interceptor := unknownconnect.NewInterceptor(func(ctx context.Context, spec connect.Spec, msg proto.Message) error {
+		msg.ProtoReflect().SetUnknown(nil)
+		return nil
+	})
+
+	{
+		req := &new.NewUserRequest{
+			User: &new.User{
+				Name:  "bob",
+				Email: "bob@example.com",
+			},
+		}
+		unknownField := protopack.Message{protopack.Tag{Number: 3, Type: protopack.Fixed32Type}, protopack.Int32(42)}
+		req.ProtoReflect().SetUnknown(unknownField.Marshal())
+		wrapped := interceptor.WrapUnary(func(_ context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			msg := req.Any().(proto.Message)
+			assert.Empty(t, msg.ProtoReflect().GetUnknown())
+			return connect.NewResponse(&new.NewUserResponse{}), nil
+		})
+		_, err := wrapped(context.Background(), connect.NewRequest(req))
+		require.NoError(t, err)
+	}
+	{
+		req := &new.NewUserRequest{
+			User: &new.User{
+				Name:  "bob",
+				Email: "bob@example.com",
+			},
+		}
+		unknownField := protopack.Message{protopack.Tag{Number: 3, Type: protopack.Fixed32Type}, protopack.Int32(42)}
+		req.ProtoReflect().SetUnknown(unknownField.Marshal())
+		unary := func(_ context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			msg := req.Any().(proto.Message)
+			assert.NotEmpty(t, msg.ProtoReflect().GetUnknown())
+			return connect.NewResponse(&new.NewUserResponse{}), nil
+		}
+		_, err := unary(context.Background(), connect.NewRequest(req))
+		require.NoError(t, err)
+	}
+}
 
 func TestOutdatedClient(t *testing.T) {
 	var calledCount int
@@ -76,7 +119,8 @@ func TestMessageHasUnknownFields(t *testing.T) {
 			Name:  "bob",
 			Email: "bob@example.com",
 		}
-		user.ProtoReflect().SetUnknown(protoreflect.RawFields([]byte{8, 96, 01}))
+		unknownField := protopack.Message{protopack.Tag{Number: 3, Type: protopack.Fixed32Type}, protopack.Int32(42)}
+		user.ProtoReflect().SetUnknown(protoreflect.RawFields(unknownField.Marshal()))
 		req := &new.NewUserRequest{
 			User: user,
 		}

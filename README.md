@@ -8,7 +8,7 @@ go get -u github.com/sudorandom/unknownconnect-go
 ```
 
 ## Server Examples
-Short example:
+Short example (logging):
 ```golang
 import (
     "log/slog"
@@ -23,7 +23,15 @@ unknownconnect.NewInterceptor(func(ctx context.Context, spec connect.Spec, msg p
 })
 ```
 
-Full:
+Shorter example (dropping unknown fields):
+```golang
+unknownconnect.NewInterceptor(func(ctx context.Context, spec connect.Spec, msg proto.Message) error {
+    msg.ProtoReflect().SetUnknown(nil)
+    return nil
+})
+```
+
+Full example (returning an error):
 ```golang
 import (
     "log/slog"
@@ -48,6 +56,7 @@ func main() {
 The first example simply emits a warning log and the second example will fail the request if the server receives a message with unknown fields. You can decide what to do. Here are some ideas:
 
 - Add to a metric that counts how often this happens
+- Drop the unknown fields
 - Fail the request/response; maybe the most useful in non-production integration environments
 - Emit a log
 - Add an annotation to the context to be used in the handler
