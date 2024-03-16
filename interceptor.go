@@ -30,9 +30,10 @@ func NewInterceptor(callback UnknownCallback) *interceptor {
 
 func (i *interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		isClient := req.Spec().IsClient
+		spec := req.Spec()
+		isClient := spec.IsClient
 		if !isClient {
-			if err := checkForUnknownFields(ctx, req.Any(), req.Spec(), i.callback); err != nil {
+			if err := checkForUnknownFields(ctx, req.Any(), spec, i.callback); err != nil {
 				return nil, err
 			}
 		}
@@ -41,7 +42,7 @@ func (i *interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			return resp, err
 		}
 		if isClient {
-			if err := checkForUnknownFields(ctx, resp.Any(), req.Spec(), i.callback); err != nil {
+			if err := checkForUnknownFields(ctx, resp.Any(), spec, i.callback); err != nil {
 				return resp, err
 			}
 		}
@@ -113,7 +114,7 @@ func checkForUnknownFields(ctx context.Context, m any, spec connect.Spec, callba
 	return nil
 }
 
-// MessageHasUnknownFields returns true if the given protoreflect.Message has unknown fields.
+// MessageHasUnknownFields returns true if the given protoreflect.Message has any unknown fields.
 func MessageHasUnknownFields(msg protoreflect.Message) bool {
 	if len(msg.GetUnknown()) > 0 {
 		return true
@@ -121,15 +122,44 @@ func MessageHasUnknownFields(msg protoreflect.Message) bool {
 
 	var hasUnknown bool
 	msg.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-		switch fd.Kind() {
-		case protoreflect.MessageKind:
-			if MessageHasUnknownFields(v.Message()) {
-				hasUnknown = true
-				return false
-			}
-		default:
+		if fieldHasUnknownFields(fd, v) {
+			hasUnknown = true
+			return false
 		}
 		return true
 	})
 	return hasUnknown
+}
+
+func fieldHasUnknownFields(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+	if fd.IsMap() {
+		var hasUnknown bool
+		v.Map().Range(func(mk protoreflect.MapKey, mv protoreflect.Value) bool {
+			if fieldHasUnknownFields(fd.MapValue(), mv) {
+				hasUnknown = true
+				return false
+			}
+			return true
+		})
+		return hasUnknown
+	}
+
+	switch fd.Kind() {
+	case protoreflect.MessageKind, protoreflect.GroupKind:
+		if fd.IsList() {
+			list := v.List()
+			for i := 0; i < list.Len(); i++ {
+				vv := list.Get(i)
+				if MessageHasUnknownFields(vv.Message()) {
+					return true
+				}
+			}
+		} else {
+			if MessageHasUnknownFields(v.Message()) {
+				return true
+			}
+		}
+	default:
+	}
+	return false
 }

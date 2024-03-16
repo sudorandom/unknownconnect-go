@@ -7,32 +7,27 @@ unknownconnect-go is an interceptor for [ConnectRPC](https://connectrpc.com/) cl
 go get -u github.com/sudorandom/unknownconnect-go
 ```
 
+## Functions
+- [unknownconnect.NewInterceptor](https://pkg.go.dev/github.com/sudorandom/unknownconnect-go#NewInterceptor)
+- [unknownconnect.NewDropUnknownInterceptor](https://pkg.go.dev/github.com/sudorandom/unknownconnect-go#NewDropUnknownInterceptor)
+
+
 ## Server Examples
 Short example (logging):
-```golang
-import (
-    "log/slog"
-
-    unknownconnect "github.com/sudorandom/unknownconnect-go"
-)
-
-...
+```go
 unknownconnect.NewInterceptor(func(ctx context.Context, spec connect.Spec, msg proto.Message) error {
     slog.Warn("received a protobuf message with unknown fields", slog.Any("spec", spec), slog.Any("msg", msg))
     return nil
 })
 ```
 
-Shorter example (dropping unknown fields):
-```golang
-unknownconnect.NewInterceptor(func(ctx context.Context, spec connect.Spec, msg proto.Message) error {
-    msg.ProtoReflect().SetUnknown(nil)
-    return nil
-})
+Dropping unknown fields:
+```go
+unknownconnect.NewDropUnknownInterceptor()
 ```
 
 Full example (returning an error):
-```golang
+```go
 import (
     "log/slog"
 
@@ -65,7 +60,7 @@ The first example simply emits a warning log and the second example will fail th
 ## Client Examples
 And it works the same for clients, too:
 
-```golang
+```go
 package main
 
 import (

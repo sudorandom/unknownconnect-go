@@ -8,6 +8,10 @@ service UserManagement {
 
 message NewUserRequest {
   User user = 1;
+  map<int32, int32> primative_map = 2;
+  map<int32, User> msg_map = 3;
+  repeated int32 primative_list = 4;
+  repeated User msg_list = 5;
 }
 
 message NewUserResponse {
