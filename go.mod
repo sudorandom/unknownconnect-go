@@ -5,7 +5,7 @@ go 1.21.6
 require (
 	connectrpc.com/connect v1.15.0
 	github.com/stretchr/testify v1.9.0
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 )
 
 require (
