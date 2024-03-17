@@ -3,6 +3,7 @@ package unknownconnect_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -144,6 +145,28 @@ func TestInterceptor(t *testing.T) {
 		}))
 		resp, err := unary(context.Background(), connect.NewRequest(user))
 		assert.NoError(t, err)
+		assert.Nil(t, resp)
+		assert.True(t, called)
+	})
+	t.Run("return error", func(t *testing.T) {
+		user := &new.User{Name: "bob", Email: "bob@example.com"}
+		user.ProtoReflect().SetUnknown(protoreflect.RawFields([]byte{8, 96, 01}))
+		var called bool
+		interceptor := unknownconnect.NewInterceptor(
+			unknownconnect.WithCallback(func(ctx context.Context, s connect.Spec, m proto.Message) error {
+				called = true
+				proto.Equal(m, user)
+				assert.Len(t, m.ProtoReflect().GetUnknown(), 3)
+				return errors.New("unknown fields error")
+			}),
+			unknownconnect.WithDrop(),
+		)
+		unary := interceptor.WrapUnary(connect.UnaryFunc(func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			assert.Fail(t, "this should not be called because an error should have been returned earlier")
+			return nil, nil
+		}))
+		resp, err := unary(context.Background(), connect.NewRequest(user))
+		assert.ErrorContains(t, err, "unknown fields error")
 		assert.Nil(t, resp)
 		assert.True(t, called)
 	})
