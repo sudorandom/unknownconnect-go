@@ -7,23 +7,38 @@ unknownconnect-go is an interceptor for [ConnectRPC](https://connectrpc.com/) cl
 go get -u github.com/sudorandom/unknownconnect-go
 ```
 
-## Functions
-- [unknownconnect.NewInterceptor](https://pkg.go.dev/github.com/sudorandom/unknownconnect-go#NewInterceptor)
-- [unknownconnect.NewDropUnknownInterceptor](https://pkg.go.dev/github.com/sudorandom/unknownconnect-go#NewDropUnknownInterceptor)
+## Docs
+```go
+package unknownconnect // import "github.com/sudorandom/unknownconnect-go"
+
+// Interceptors
+func NewInterceptor(opts ...option) *interceptor
+func WithCallback(callback UnknownCallback) option
+func WithDrop() option
+type UnknownCallback func(context.Context, connect.Spec, proto.Message) error
+
+// Helpers
+func DropUnknownFields(msg protoreflect.Message)
+func ForEachUnknownField(msg protoreflect.Message, cb func(msg protoreflect.Message) bool)
+func MessageHasUnknownFields(msg protoreflect.Message) bool
+
+```
 
 
 ## Server Examples
 Short example (logging):
 ```go
-unknownconnect.NewInterceptor(func(ctx context.Context, spec connect.Spec, msg proto.Message) error {
-    slog.Warn("received a protobuf message with unknown fields", slog.Any("spec", spec), slog.Any("msg", msg))
-    return nil
-})
+unknownconnect.NewInterceptor(
+    unknownconnect.WithCallback(func(ctx context.Context, spec connect.Spec, msg proto.Message) error {
+        slog.Warn("received a protobuf message with unknown fields", slog.Any("spec", spec), slog.Any("msg", msg))
+        return nil
+    }),
+)
 ```
 
 Dropping unknown fields:
 ```go
-unknownconnect.NewDropUnknownInterceptor()
+unknownconnect.NewInterceptor(unknownconnect.WithDrop())
 ```
 
 Full example (returning an error):
@@ -39,10 +54,11 @@ func main() {
     greeter := &GreetServer{}
     mux := http.NewServeMux()
     path, handler := greetv1connect.NewGreetServiceHandler(greeter, connect.WithInterceptors(
-        unknownconnect.NewInterceptor(func(ctx context.Context, spec connect.Spec, msg proto.Message) error {
-            return connect.NewError(connect.InvalidArgument, err)
-        }),
-    ))
+        unknownconnect.NewInterceptor(
+            unknownconnect.WithCallback(func(ctx context.Context, spec connect.Spec, msg proto.Message) error {
+                return connect.NewError(connect.InvalidArgument, err)
+            }),
+    )))
     mux.Handle(path, handler)
     http.ListenAndServe("localhost:8080", h2c.NewHandler(mux, &http2.Server{}))
 }
@@ -79,11 +95,12 @@ func main() {
         http.DefaultClient,
         "http://localhost:8080",
         connect.WithInterceptors(
-            unknownconnect.NewInterceptor(func(ctx context.Context, spec connect.Spec, msg proto.Message) error {
-                slog.Warn("received a protobuf message with unknown fields", slog.Any("spec", spec), slog.Any("msg", msg))
-                return nil
-            })
-        ),
+            unknownconnect.NewInterceptor(
+                unknownconnect.WithCallback(func(ctx context.Context, spec connect.Spec, msg proto.Message) error {
+                    slog.Warn("received a protobuf message with unknown fields", slog.Any("spec", spec), slog.Any("msg", msg))
+                    return nil
+                }),
+        )),
     )
     res, err := client.Greet(
         context.Background(),

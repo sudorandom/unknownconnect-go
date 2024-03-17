@@ -6,7 +6,6 @@ import (
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 var _ connect.Interceptor = (*interceptor)(nil) // we make sure it implements the interface
@@ -16,16 +15,27 @@ var _ connect.Interceptor = (*interceptor)(nil) // we make sure it implements th
 // be nested deeper into this given message.
 type UnknownCallback func(context.Context, connect.Spec, proto.Message) error
 
+type interceptorOpts struct {
+	drop      bool
+	callbacks []UnknownCallback
+}
+
 type interceptor struct {
-	callback UnknownCallback
+	opts *interceptorOpts
 }
 
 // NewInterceptor creates a new interceptor appropriate to pass into a new ConnectRPC client or server.
 // The given callback is called whenever a message is detected to have an unknown field. That means
 // a field is being given to this client/server that does not. The callback can decide what to do.
 // Any error returned from the callback will be used as an error in the request or response.
-func NewInterceptor(callback UnknownCallback) *interceptor {
-	return &interceptor{callback: callback}
+func NewInterceptor(opts ...option) *interceptor {
+	o := &interceptorOpts{
+		callbacks: []UnknownCallback{},
+	}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return &interceptor{opts: o}
 }
 
 func (i *interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
@@ -33,7 +43,7 @@ func (i *interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		spec := req.Spec()
 		isClient := spec.IsClient
 		if !isClient {
-			if err := checkForUnknownFields(ctx, req.Any(), spec, i.callback); err != nil {
+			if err := handleMessage(ctx, req.Any(), spec, i.opts); err != nil {
 				return nil, err
 			}
 		}
@@ -42,7 +52,7 @@ func (i *interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			return resp, err
 		}
 		if isClient {
-			if err := checkForUnknownFields(ctx, resp.Any(), spec, i.callback); err != nil {
+			if err := handleMessage(ctx, resp.Any(), spec, i.opts); err != nil {
 				return resp, err
 			}
 		}
@@ -56,8 +66,8 @@ func (i *interceptor) WrapStreamingClient(next connect.StreamingClientFunc) conn
 		return &wrappedClientConn{
 			ctx:                 ctx,
 			StreamingClientConn: conn,
-			callback:            i.callback,
 			spec:                spec,
+			opts:                i.opts,
 		}
 	}
 }
@@ -67,21 +77,21 @@ func (i *interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) co
 		return next(ctx, &wrappedHandlerConn{
 			ctx:                  ctx,
 			StreamingHandlerConn: conn,
-			callback:             i.callback,
 			spec:                 conn.Spec(),
+			opts:                 i.opts,
 		})
 	}
 }
 
 type wrappedHandlerConn struct {
 	connect.StreamingHandlerConn
-	ctx      context.Context
-	callback UnknownCallback
-	spec     connect.Spec
+	ctx  context.Context
+	spec connect.Spec
+	opts *interceptorOpts
 }
 
 func (w *wrappedHandlerConn) Receive(msg any) error {
-	if err := checkForUnknownFields(w.ctx, msg, w.spec, w.callback); err != nil {
+	if err := handleMessage(w.ctx, msg, w.spec, w.opts); err != nil {
 		return err
 	}
 	return w.StreamingHandlerConn.Receive(msg)
@@ -93,73 +103,32 @@ func (w *wrappedHandlerConn) RequestHeader() http.Header {
 
 type wrappedClientConn struct {
 	connect.StreamingClientConn
-	ctx      context.Context
-	callback UnknownCallback
-	spec     connect.Spec
+	ctx  context.Context
+	spec connect.Spec
+	opts *interceptorOpts
 }
 
 func (w *wrappedClientConn) Receive(msg any) error {
-	if err := checkForUnknownFields(w.ctx, msg, w.spec, w.callback); err != nil {
+	if err := handleMessage(w.ctx, msg, w.spec, w.opts); err != nil {
 		return err
 	}
 	return w.StreamingClientConn.Receive(msg)
 }
 
-func checkForUnknownFields(ctx context.Context, m any, spec connect.Spec, callback UnknownCallback) error {
+func handleMessage(ctx context.Context, m any, spec connect.Spec, opts *interceptorOpts) error {
 	if msg, ok := (m).(proto.Message); ok {
-		if MessageHasUnknownFields(msg.ProtoReflect()) {
-			return callback(ctx, spec, msg)
+		if opts.drop {
+			defer func() {
+				DropUnknownFields(msg.ProtoReflect())
+			}()
+		}
+		if len(opts.callbacks) > 0 && MessageHasUnknownFields(msg.ProtoReflect()) {
+			for _, cb := range opts.callbacks {
+				if err := cb(ctx, spec, msg); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
-}
-
-// MessageHasUnknownFields returns true if the given protoreflect.Message has any unknown fields.
-func MessageHasUnknownFields(msg protoreflect.Message) bool {
-	if len(msg.GetUnknown()) > 0 {
-		return true
-	}
-
-	var hasUnknown bool
-	msg.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-		if fieldHasUnknownFields(fd, v) {
-			hasUnknown = true
-			return false
-		}
-		return true
-	})
-	return hasUnknown
-}
-
-func fieldHasUnknownFields(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-	if fd.IsMap() {
-		var hasUnknown bool
-		v.Map().Range(func(mk protoreflect.MapKey, mv protoreflect.Value) bool {
-			if fieldHasUnknownFields(fd.MapValue(), mv) {
-				hasUnknown = true
-				return false
-			}
-			return true
-		})
-		return hasUnknown
-	}
-
-	switch fd.Kind() {
-	case protoreflect.MessageKind, protoreflect.GroupKind:
-		if fd.IsList() {
-			list := v.List()
-			for i := 0; i < list.Len(); i++ {
-				vv := list.Get(i)
-				if MessageHasUnknownFields(vv.Message()) {
-					return true
-				}
-			}
-		} else {
-			if MessageHasUnknownFields(v.Message()) {
-				return true
-			}
-		}
-	default:
-	}
-	return false
 }
